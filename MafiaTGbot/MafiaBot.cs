@@ -128,9 +128,14 @@ namespace MafiaTGbot
         }
         public async void OnGamerJoined(GameSession session, int messageId)
         {
-            var text = GenerateRegistrationMessage(session, out var buttons);
+            try
+            {
+  var text = GenerateRegistrationMessage(session, out var buttons);
             await client.EditMessageTextAsync(session.Id, messageId, text, parseMode: ParseMode.Html, replyMarkup: new InlineKeyboardMarkup(buttons));
 
+            }
+            catch { }
+          
             //botClient.EditMessageTextAsync(callbackQuery.Message.Chat.Id, callbackQuery.Message.MessageId, "змінено");
         }
 
@@ -292,7 +297,7 @@ namespace MafiaTGbot
             {
                 await Task.Delay(10000);
                 voices = telegramVote.GetVoices();
-                if (voices.Length == canVoteCount)
+                if (voices.Length == canVoteCount - 1)
                     break;
             }
 

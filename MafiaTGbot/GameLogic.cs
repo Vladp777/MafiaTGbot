@@ -11,7 +11,11 @@ namespace MafiaTGbot
     public  class GameLogic
     {
         private MafiaBot _bot;
-        public GameLogic(MafiaBot bot) {  _bot = bot; }
+        public GameLogic(MafiaBot bot) 
+        {
+            _bot = bot; 
+        }
+
         private Dictionary<int, int> _healedRegistry = new Dictionary<int, int>();
         private Dictionary<int, int> _fuckedRegistry = new Dictionary<int, int>();
         private Dictionary<int, List<int>> _chekUpRegistry = new Dictionary<int, List<int>>();
@@ -78,7 +82,7 @@ namespace MafiaTGbot
             {
                 GameSession currentSession;
                 BotUser joinedGamerAccount = param.user;
-                int sessionId = (int) param.callbackQuery.Message.Chat.Id;
+                int sessionId = (int)param.callbackQuery.Message.Chat.Id;
 
                 currentSession = DbJSON.GetSessionFromDBAsync(sessionId).Result;
 
@@ -220,21 +224,31 @@ namespace MafiaTGbot
                 }
 
                 
-                var role = session.GameMembers.Where(m => m.botUser.Id == param.user.Id).Select(m => m.Role).FirstOrDefault();
+                var man = session.GameMembers.FirstOrDefault(m => m.botUser.Id == param.user.Id);
 
-                var describedRole = role switch
+                if (man == null)
+                {
+                    await _bot.SendAnswerToGamer(param.callbackQuery.Id,
+                        "Ти не береш участі у грі");
+                    return;
+                }
+
+
+                var describedRole = man.Role switch
                 {
                      GameRoles.Mafia => "Ти мафія",
                      GameRoles.Doctor => "Ти лікар",
                      GameRoles.Cop => "Ти Комісар",
-                     GameRoles.Citizen => "Ти мирний житель"
+                     GameRoles.Citizen => "Ти мирний житель",
+                     GameRoles.Maniac => "Ти маніяк",
+                     GameRoles.Whore => "Ти повія"
                 };
 
-                if (role == GameRoles.Mafia)
+                if (man.Role == GameRoles.Mafia)
                 {
                     var listOfMafiaName = session.GameMembers.Where(a => a.Role == GameRoles.Mafia 
                                                                         && a.botUser.Id != param.user.Id).Select(a => a.botUser.Name);
-                    if (listOfMafiaName != null)
+                    if (listOfMafiaName.Count() > 0)
                     {
                         describedRole += "\nСоюзники: \n";
                         foreach (var a in listOfMafiaName)
@@ -280,8 +294,6 @@ namespace MafiaTGbot
                     return;
                 }
 
-
-
                 var actionOwnerRole = session.GameMembers.Where(a => a.botUser.Id == actionOwnerId).First().Role;
 
                 Dictionary<GameRoles, GameAction> describedRole = new()
@@ -319,8 +331,6 @@ namespace MafiaTGbot
                     return;
                 }
 
-
-
                 if (userAction.gameAction == GameAction.Checkup)
                 {
                     if(session.GameMembers.Where(a => a.botUser.Id == victimId).First().Role == GameRoles.Mafia)
@@ -329,10 +339,7 @@ namespace MafiaTGbot
                         _chekUpRegistry[sessionId].Add(victimId);
                     }
                     else
-                    {
                         await _bot.SendAnswerToGamer(param.callbackQuery.Id, $"{userAction.Victim.Name} - НЕ мафія", true);
-
-                    }
                 }
 
                 if (userAction.gameAction == GameAction.Healing)
@@ -340,6 +347,7 @@ namespace MafiaTGbot
                     if (_healedRegistry[sessionId] == victimId)
                     {
                         await _bot.SendAnswerToGamer(param.callbackQuery.Id, $"Вибери іншого", true);
+                        return;
                     }
                     else
                         _healedRegistry[sessionId] = victimId;
@@ -350,7 +358,7 @@ namespace MafiaTGbot
                     if (_fuckedRegistry[sessionId] == victimId || actionOwnerId == victimId)
                     {
                         await _bot.SendAnswerToGamer(param.callbackQuery.Id, $"Вибери іншого", true);
-
+                        return;
                     }
                     else
                         _fuckedRegistry[sessionId] = victimId;
@@ -373,7 +381,7 @@ namespace MafiaTGbot
             }
         }
 
-        private async Task RunGame(int sessionId)
+        private async Task  RunGame(int sessionId)
         {
             try
             {
@@ -381,8 +389,8 @@ namespace MafiaTGbot
                 //_healedRegistry.Add(sessionId, 0);
                 //_fuckedRegistry.Add(sessionId, 0);
                 //_chekUpRegistry.Add(sessionId, 0);
-
-                var KilledPlayers = new List<GameSessionMember>();
+                //_healedRegistry[sessionId] = 0;
+                //_fuckedRegistry[sessionId] = 0;
 
                 var session = DbJSON.GetSessionFromDBAsync(sessionId).Result;
 
@@ -395,128 +403,94 @@ namespace MafiaTGbot
                 while (true)
                 {
                     _actions[sessionId].Clear();
-                    _healedRegistry[sessionId] = 0;
-                    _fuckedRegistry[sessionId] = 0;
+                    
+                    var KilledPlayers = new List<GameSessionMember>();
 
                     var message = await _bot.SendNightMessageToRoom(session, dayNumber);
 
-                    await Task.Delay(10000);
+                    await Task.Delay(60000);
 
                     await _bot.DeleteInlineKeyboard(message);
-
-                    //await Task.Delay(3000);
-                    //var doctorActionTask = AskDoctorForAction(session).ConfigureAwait(false);
-                    //await Task.Delay(2000);
-                    //var mafiaActionTask = AskMafiaForAction(session).ConfigureAwait(false);
-                    //await Task.Delay(2000);
-                    //var copActionTask = AskCopForAction(session).ConfigureAwait(false);
 
                     // resolving actions
                     var doctorAction = _actions[sessionId].FirstOrDefault(a => a.gameAction == GameAction.Healing);
                     GameSessionMember? healingTarget = null;
 
                     if (doctorAction != null)
-                    {
                         healingTarget = session.GameMembers.First(a => a.botUser.Id == doctorAction.Victim.Id);
-                        //_healedRegistry[sessionId] = doctorAction.Victim.Id;
-                    }
+                    else
+                        _healedRegistry[sessionId] = 0; 
 
                     var whoreAction = _actions[sessionId].FirstOrDefault(a => a.gameAction == GameAction.Fucking);
-                    GameSessionMember whoreTarget = null;
+                    GameSessionMember? whoreTarget = null;
                     if (whoreAction != null)
                     {
                         whoreTarget = session.GameMembers.First(a => a.botUser.Id == whoreAction.Victim.Id);
                         //_fuckedRegistry[sessionId] = whoreAction.Victim.Id;
                     }
+                    else
+                    {
+                        _fuckedRegistry[sessionId] = 0;
+                    }
 
                     var copAction = _actions[sessionId].FirstOrDefault(a => a.gameAction == GameAction.Checkup);
-                    GameSessionMember copTarget = null;
+                    GameSessionMember? copTarget = null;
                     if (copAction != null)
                     {
                         copTarget = session.GameMembers.First(a => a.botUser.Id == copAction.Victim.Id);
                         if (_chekUpRegistry[sessionId].Where(a => a == copTarget.botUser.Id).Count() == 2)
-                        {
-                            if (healingTarget != null)
-                            {
-                                if (healingTarget.botUser.Id == copTarget.botUser.Id)
-                                    healingTarget = null;
-                            }
-                            else if (whoreTarget != null)
-                            {
-                                if (whoreTarget.botUser.Id == copTarget.botUser.Id)
-                                    whoreTarget = null;
-                            }
-                            else
-                            {
-                                await KillGamer(sessionId, copTarget);
-                                KilledPlayers.Add(copTarget);
-                            }
-                            //if (healingTarget.botUser.Id == copTarget.botUser.Id)
-                            //    healingTarget = null;
-                            //else if (whoreTarget.botUser.Id == copTarget.botUser.Id)
-                            //    whoreTarget = null;
-                            //else
-                            //{
-                            //    await KillGamer(sessionId, copTarget);
-                            //    KilledPlayers.Add(copTarget);
-                            //}
-                        }
+                            KilledPlayers.Add(copTarget);
                     }
 
                     var mafiaAction = _actions[sessionId].FirstOrDefault(a => a.gameAction == GameAction.Killing);
-                    GameSessionMember mafiaTarget = null;
+                    GameSessionMember? mafiaTarget = null;
                     if (mafiaAction != null)
                     {
                         mafiaTarget = session.GameMembers.First(a => a.botUser.Id == mafiaAction.Victim.Id);
 
-                        if (healingTarget != null)
-                        {
-                            if (healingTarget.botUser.Id == mafiaTarget.botUser.Id)
-                                healingTarget = null;
-                        }
-                        else if (whoreTarget != null)
-                        {
-                            if (whoreTarget.botUser.Id == mafiaTarget.botUser.Id)
-                                whoreTarget = null;
-                        }
-                        else
-                        {
-                            await KillGamer(sessionId, mafiaTarget);
-                            KilledPlayers.Add(mafiaTarget);
-                        }
+                        KilledPlayers.Add(mafiaTarget);
+
+                        if (mafiaTarget.Role == GameRoles.Whore && whoreTarget != null && whoreTarget.botUser.Id != mafiaAction.ActionFromID) 
+                            KilledPlayers.Add(whoreTarget);
                     }
 
                     var maniacAction = _actions[sessionId].FirstOrDefault(a => a.gameAction == GameAction.Murder);
-                    GameSessionMember maniacTarget = null;
+                    GameSessionMember? maniacTarget = null;
                     if (maniacAction != null)
                     {
                         maniacTarget = session.GameMembers.First(a => a.botUser.Id == maniacAction.Victim.Id);
 
-                        if (healingTarget != null)
+                        KilledPlayers.Add(maniacTarget);
+
+                        if (maniacTarget.Role == GameRoles.Whore && whoreTarget != null && whoreTarget.botUser.Id != maniacAction.ActionFromID)
+                            KilledPlayers.Add(whoreTarget);
+
+                    }
+
+                    // Whore action
+                    if (whoreAction != null && !KilledPlayers.Any(a => a.botUser.Id == whoreAction.ActionFromID))
+                    {
+                        if (whoreTarget != null && KilledPlayers.Contains(whoreTarget))
                         {
-                            if (healingTarget.botUser.Id == maniacTarget.botUser.Id)
-                                healingTarget = null;
-                        }
-                        else if (whoreTarget != null)
-                        {
-                            if (whoreTarget.botUser.Id == maniacTarget.botUser.Id)
-                                whoreTarget = null;
-                        }
-                        else
-                        {
-                            await KillGamer(sessionId, maniacTarget);
-                            KilledPlayers.Add(maniacTarget);
+                            KilledPlayers.Remove(whoreTarget);
                         }
                     }
+
+                    // Doctor action
+                    if(healingTarget != null)
+                        KilledPlayers.Remove(healingTarget);
 
                     var newKilledPlayers = KilledPlayers.Distinct();
 
-                    if (newKilledPlayers.Count() == 0)
-                    {
+                    if (!newKilledPlayers.Any())
                         await _bot.SendMessageToRoom(sessionId, "Неймовірно. Усі живі");
+                    else
+                    {
+                        foreach (var player in newKilledPlayers)
+                            await KillGamer(sessionId, player);
                     }
 
-                    await Task.Delay(3000);
+                    await Task.Delay(5000);
 
                     // ensure this game is over
                     if (await IsGameOver(session, stopwatch))
@@ -529,25 +503,19 @@ namespace MafiaTGbot
 <b>Гравці</b>: 
 {GetMembersInfo(session, false, false)}
 
-Час на обговорення: 90 сек.");
+Час на обговорення: 60 сек.");
 
-                    await Task.Delay(10000);
+                    await Task.Delay(60000);
                     var gamerForLynch = await PublicLynchVote(session);
 
                     if (gamerForLynch != null)
                     {
-
-
                         await _bot.SendMessageToRoom(sessionId,
                             @$"Виганяємо {gamerForLynch.botUser.Name}...");
                         await KillGamer((int)session.Id, gamerForLynch);
-
                     }
                     else
-                    {
-                        await _bot.SendMessageToRoom((int)session.Id,
-                            "Сьогодні нікого не виганяємо");
-                    }
+                        await _bot.SendMessageToRoom((int)session.Id, "Сьогодні нікого не виганяємо");
 
                     #endregion
 
@@ -696,35 +664,37 @@ namespace MafiaTGbot
         }
 
 
-        private static void ResolveRoles(GameSession session)
+        public static void ResolveRoles(GameSession session)
         {
-            var players = session.GameMembers.ToList();
+            var players = session.GameMembers;
             var playersCount = players.Count;
 
-            var enemyCount = (int)Math.Truncate(playersCount / (double)Constants.MinimalGamerCount);
+            //var enemyCount = (int)Math.Truncate(playersCount / (double)Constants.MinimalGamerCount);
 
-            var listOfRoles = new List<GameRoles>();
+            var listOfRoles = new List<GameRoles>
+            {
+                GameRoles.Mafia,
+                GameRoles.Doctor
+            };
 
-            listOfRoles.Add(GameRoles.Mafia);
-            listOfRoles.Add(GameRoles.Doctor);
-
-            if(playersCount > 6)
+            if (playersCount > 6)
             {
                 listOfRoles.Add(GameRoles.Cop);
             }
             
-            if(playersCount > 7)
+            if(playersCount >= 7)
             {
                 listOfRoles.Add(GameRoles.Mafia);
             }
 
-            if(playersCount > 9)
+            if(playersCount >= 9)
             {
                 listOfRoles.Add(GameRoles.Maniac);
                 listOfRoles.Add(GameRoles.Whore);
             }
+            var countOfCitizen = playersCount - listOfRoles.Count;
 
-            for (int i = 0; i < playersCount - listOfRoles.Count; i++)
+            for (int i = 0; i < countOfCitizen; i++)
             {
                 listOfRoles.Add(GameRoles.Citizen);
             }
