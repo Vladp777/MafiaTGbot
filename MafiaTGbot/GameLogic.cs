@@ -426,7 +426,8 @@ namespace MafiaTGbot
                     if (whoreAction != null)
                     {
                         whoreTarget = session.GameMembers.First(a => a.botUser.Id == whoreAction.Victim.Id);
-                        //_fuckedRegistry[sessionId] = whoreAction.Victim.Id;
+
+                        await _bot.SendMessageToRoom(sessionId, "Переспали з " + whoreTarget.botUser.Name);
                     }
                     else
                     {
@@ -450,7 +451,7 @@ namespace MafiaTGbot
 
                         KilledPlayers.Add(mafiaTarget);
 
-                        if (mafiaTarget.Role == GameRoles.Whore && whoreTarget != null && whoreTarget.botUser.Id != mafiaAction.ActionFromID) 
+                        if (mafiaTarget.Role == GameRoles.Whore && whoreTarget != null) // && whoreTarget.botUser.Id != mafiaAction.ActionFromID) 
                             KilledPlayers.Add(whoreTarget);
                     }
 
@@ -462,7 +463,7 @@ namespace MafiaTGbot
 
                         KilledPlayers.Add(maniacTarget);
 
-                        if (maniacTarget.Role == GameRoles.Whore && whoreTarget != null && whoreTarget.botUser.Id != maniacAction.ActionFromID)
+                        if (maniacTarget.Role == GameRoles.Whore && whoreTarget != null) // && whoreTarget.botUser.Id != maniacAction.ActionFromID)
                             KilledPlayers.Add(whoreTarget);
 
                     }
